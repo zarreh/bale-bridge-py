@@ -56,7 +56,8 @@ log = logging.getLogger("bale-bridge")
 class BotWorker:
     """One polling worker per Bale token. Fully isolated state."""
 
-    def __init__(self, name: str, token: str, session_prefix: str | None = None):
+    def __init__(self, name: str, token: str, session_prefix: str | None = None,
+                 model: str | None = None, system_prompt: str | None = None):
         if not name:
             raise ValueError("bot name is required")
         if not token:
@@ -64,6 +65,8 @@ class BotWorker:
         self.name = name
         self.token = token
         self.session_prefix = session_prefix or name
+        self.model = model
+        self.system_prompt = system_prompt
         self.offset = 0
         self._processing: set = set()
         self._lock = Lock()
@@ -97,26 +100,16 @@ class BotWorker:
 
     # ── OpenClaw ──────────────────────────────────────────────────────────
 
-    def send_to_openclaw(self, chat_id: str, text: str, sender: str) -> str | None:
-        # Session ID scopes conversation per (bot, chat) so different bots
-        # never share memory even if chat IDs happen to collide.
-        session_id = f"{self.session_prefix}-{chat_id}"
-        message = f"[{sender}]: {text}" if sender else text
-
-        self.log.info("→ OpenClaw  chat=%-12s  sender=%-12s  %s",
-                      chat_id, sender, text[:80])
-
+    def _run_openclaw(self, session_id: str, message: str) -> str | None:
+        """Run openclaw agent with a message and return the text reply."""
         try:
             result = subprocess.run(
                 [OPENCLAW_BIN, "agent", "--session-id", session_id,
                  "--message", message, "--json"],
-                capture_output=True,
-                text=True,
-                timeout=AGENT_TIMEOUT,
+                capture_output=True, text=True, timeout=AGENT_TIMEOUT,
             )
             if result.returncode != 0:
-                self.log.error("openclaw agent error (rc=%d): %s",
-                               result.returncode, result.stderr[:200])
+                self.log.error("openclaw error (rc=%d): %s", result.returncode, result.stderr[:200])
                 return None
             try:
                 data = json.loads(result.stdout)
@@ -127,11 +120,22 @@ class BotWorker:
             except (json.JSONDecodeError, KeyError):
                 return (result.stdout or "").strip() or None
         except subprocess.TimeoutExpired:
-            self.log.error("openclaw agent timed out after %ds", AGENT_TIMEOUT)
+            self.log.error("openclaw timed out after %ds", AGENT_TIMEOUT)
             return None
         except Exception as e:
-            self.log.error("openclaw agent failed: %s", e)
+            self.log.error("openclaw failed: %s", e)
             return None
+
+    def send_to_openclaw(self, chat_id: str, text: str, sender: str) -> str | None:
+        # Session ID scopes conversation per (bot, chat) so different bots
+        # never share memory even if chat IDs happen to collide.
+        session_id = f"{self.session_prefix}-{chat_id}"
+        message = f"[{sender}]: {text}" if sender else text
+
+        self.log.info("→ OpenClaw  chat=%-12s  sender=%-12s  %s",
+                      chat_id, sender, text[:80])
+
+        return self._run_openclaw(session_id, message)
 
     # ── Update handling ───────────────────────────────────────────────────
 
@@ -263,6 +267,8 @@ def load_bots() -> list[BotWorker]:
                 name=name,
                 token=token,
                 session_prefix=entry.get("session_prefix"),
+                model=entry.get("model"),
+                system_prompt=entry.get("system_prompt"),
             ))
         return workers
 
