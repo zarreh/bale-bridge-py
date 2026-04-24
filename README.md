@@ -17,17 +17,34 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configure
+
+**Multi-bot mode (recommended):** create `bots.json` from the example and fill in one entry per Bale bot.
+
 ```bash
-cp .env.example .env
-nano .env
+cp bots.example.json bots.json
+nano bots.json
 ```
+
+```json
+[
+  { "name": "ALI_BALE",     "token": "123:ABC...", "session_prefix": "ali" },
+  { "name": "SUPPORT_BALE", "token": "789:XYZ...", "session_prefix": "support" }
+]
+```
+
+Each bot runs in its own polling thread with an isolated OpenClaw session namespace (`{session_prefix}-{chat_id}`), so channels never cross-contaminate. `bots.json` is gitignored.
+
+**Legacy single-bot mode:** if `bots.json` is absent, `BALE_BOT_TOKEN` in `.env` is used (named `ALI_BALE` by default; override with `BALE_BOT_NAME`).
 
 | Variable | What it is |
 |---|---|
-| `BALE_BOT_TOKEN` | Token from Bale's BotFather |
+| `BALE_BOT_TOKEN` | Single-bot token (legacy; ignored when `bots.json` exists) |
+| `BALE_BOT_NAME` | Label for the single-bot token (default: `ALI_BALE`) |
 | `OPENCLAW_TOKEN` | From `~/.openclaw/openclaw.json` → `gateway.auth.token` |
-| `OPENCLAW_SESSION` | Session key prefix (default: `bale`) |
+| `OPENCLAW_SESSION` | Session prefix override for single-bot mode |
 | `POLL_INTERVAL` | Seconds between polls when idle (default: `2`) |
+| `AGENT_TIMEOUT` | OpenClaw CLI timeout seconds (default: `180`) |
+| `BOTS_CONFIG` | Path to bots config file (default: `bots.json`) |
 
 ### 4. Start
 ```bash

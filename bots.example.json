@@ -1,0 +1,12 @@
+[
+  {
+    "name": "ALI_BALE",
+    "token": "REPLACE_WITH_BALE_BOT_TOKEN",
+    "session_prefix": "ali"
+  },
+  {
+    "name": "SUPPORT_BALE",
+    "token": "REPLACE_WITH_SECOND_BOT_TOKEN",
+    "session_prefix": "support"
+  }
+]
